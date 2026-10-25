@@ -11,10 +11,34 @@ struct CaptureHarness {
             let cycle = noise(count: Int(rate / 4))
             let repeated = Array(repeating: cycle, count: 12).flatMap { $0 }
             try check("250 ms exact loop at \(Int(rate)) Hz rejected", repeating(repeated, rate: rate))
+            let blockFrames = Int((rate * 0.01).rounded())
+            let quietRange = (9 * blockFrames)..<(10 * blockFrames)
+            var quietGap = cycle
+            quietGap.replaceSubrange(quietRange, with: noise(count: blockFrames).map { $0 * 0.01 })
+            try check("audible loop with one quiet block per cycle at \(Int(rate)) Hz rejected", repeating(Array(repeating: quietGap, count: 12).flatMap { $0 }, rate: rate))
+            var silentGap = cycle
+            silentGap.replaceSubrange(quietRange, with: repeatElement(Float(0), count: blockFrames))
+            try check("audible loop with one silent block per cycle at \(Int(rate)) Hz rejected", repeating(Array(repeating: silentGap, count: 12).flatMap { $0 }, rate: rate))
+            var dcGap = cycle
+            dcGap.replaceSubrange(quietRange, with: repeatElement(Float(0.25), count: blockFrames))
+            try check("audible loop with one DC block per cycle at \(Int(rate)) Hz rejected", repeating(Array(repeating: dcGap, count: 12).flatMap { $0 }, rate: rate))
             try check("changing live samples at \(Int(rate)) Hz accepted", !repeating(noise(count: Int(rate * 4)), rate: rate))
             try check("less than one second repetition accepted", !repeating(Array(repeated.prefix(Int(rate))), rate: rate))
             let toneCycle = (0..<Int(rate / 4)).map { Float(0.05 * sin(2 * .pi * 1_000 * Double($0) / rate)) }
             try check("exact single tone excluded at \(Int(rate)) Hz", !repeating(Array(repeating: toneCycle, count: 12).flatMap { $0 }, rate: rate))
+            var gatedTone = toneCycle
+            gatedTone.replaceSubrange(quietRange, with: repeatElement(Float(0), count: blockFrames))
+            try check("tonal loop with a silent block excluded at \(Int(rate)) Hz", !repeating(Array(repeating: gatedTone, count: 12).flatMap { $0 }, rate: rate))
+            for frequency in [4.0, 16.0, 60.0, 1_000.0] {
+                for amplitude in [0.01, 0.05] {
+                    for offset in [0.0, 0.25] {
+                        let quantisedTone = (0..<Int(rate / 4)).map {
+                            Float(offset + amplitude * sin(2 * .pi * frequency * Double($0) / rate))
+                        }
+                        try check("Float tone \(Int(frequency)) Hz, amplitude \(amplitude), DC \(offset) excluded at \(Int(rate)) Hz", !repeating(Array(repeating: quantisedTone, count: 12).flatMap { $0 }, rate: rate))
+                    }
+                }
+            }
         }
         try check("digital silence excluded", !repeating([Float](repeating: 0, count: 160_000), rate: 16_000))
         try check("constant DC excluded", !repeating([Float](repeating: 0.2, count: 160_000), rate: 16_000))
@@ -24,7 +48,20 @@ struct CaptureHarness {
         let stereoCycle = cycle.flatMap { [$0, $0 * 0.5] }
         let stereoLoop = Array(repeating: stereoCycle, count: 12).flatMap { $0 }
         try check("stereo exact loop rejected", repeating(stereoLoop, rate: 48_000, channels: 2))
-        try check("same words with different PCM accepted", !repeating(cycle + cycle.map { $0 + 0.000_001 } + cycle.map { $0 - 0.000_001 }, rate: 48_000))
+        let quietCycle = cycle.map { $0 * 0.01 } // about -79 dBFS, idle DSP floor
+        let quietLoop = Array(repeating: quietCycle, count: 24).flatMap { $0 }
+        try check("inaudible repeated noise floor accepted", !repeating(quietLoop, rate: 48_000))
+        try check("inaudible repeats followed by changing speech accepted", !repeating(quietLoop + noise(count: 48_000), rate: 48_000))
+        try check("DC offset does not make quiet repeated noise audible", !repeating(quietLoop.map { $0 + 0.25 }, rate: 48_000))
+        let nearFloorCycle = cycle.map { $0 * 0.06 + 0.25 }
+        try check("audible complex loop near the floor survives DC and quantisation allowance", repeating(Array(repeating: nearFloorCycle, count: 12).flatMap { $0 }, rate: 48_000))
+        let audibleTone: [Float] = (0..<cycle.count).map { index in
+            Float(0.05 * sin(Double(index) * 2 * Double.pi * 1_000 / 48_000))
+        }
+        let toneAndQuietNoise: [Float] = (0..<cycle.count).flatMap { [audibleTone[$0], quietCycle[$0]] }
+        try check("audible tone plus a separate quiet noise channel excluded", !repeating(Array(repeating: toneAndQuietNoise, count: 12).flatMap { $0 }, rate: 48_000, channels: 2))
+        let nearRepeats = (0..<12).flatMap { index in cycle.map { $0 + Float(index) * 0.000_001 } }
+        try check("near-repeat cycles with distinct PCM accepted", !repeating(nearRepeats, rate: 48_000))
 
         // Optional private fixture arguments remain outside the repository.
         // --reject path: known corrupt capture; --accept path: known good audio.

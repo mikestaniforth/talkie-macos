@@ -9,6 +9,27 @@ final class HistoryTests: XCTestCase {
     }
 
     @MainActor
+    func testCaptureWarningPersistsFullDurationAndAudioWithoutTranscript() async throws {
+        let folder = try directory()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        var sessionID = UUID()
+        do {
+            let store = HistoryStore(directory: folder)
+            let take = try store.beginSession()
+            sessionID = take.id
+            try Data("synthetic recording".utf8).write(to: XCTUnwrap(take.audioURL))
+            try store.markCaptureWarning(sessionID: take.id,
+                                         warning: "Synthetic input quality warning", durationSeconds: 18.5)
+        }
+        let saved = try XCTUnwrap(HistoryStore(directory: folder).sessions.first { $0.id == sessionID })
+        XCTAssertEqual(saved.durationSeconds, 18.5)
+        XCTAssertEqual(saved.status, .interrupted)
+        XCTAssertEqual(saved.captureWarning, "Synthetic input quality warning")
+        XCTAssertNil(saved.rawTranscript)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: try XCTUnwrap(saved.audioURL).path))
+    }
+
+    @MainActor
     func testSQLiteRestartPreservesOriginalCorrectedFrameAndPasteState() async throws {
         let folder = try directory()
         defer { try? FileManager.default.removeItem(at: folder) }

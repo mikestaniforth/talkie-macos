@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import Carbon
+import IOKit.hidsystem
 
 /// A physical key combination or a single modifier. Only the chosen shortcut is
 /// persisted; shortcut recording never stores ordinary keyboard events.
@@ -85,6 +86,104 @@ struct HotkeyChoice: Codable, Equatable, Hashable, Identifiable {
     }
 }
 
+/// Event-local shortcut state, independent of permissions and event monitors.
+/// Toggle waits for a clean tap; hold arms after its delay and cancels for typing.
+struct ModifierShortcutState {
+    enum Action: Equatable {
+        case arm(UInt64), disarm, beginHold, finishHold, cancelHold, toggle
+    }
+
+    let keyCode: UInt32
+    let hold: Bool
+    private(set) var isPressed = false
+    private var blocked = false
+    private var activated = false
+    private var generation: UInt64 = 0
+
+    mutating func flagsChanged(keyCode eventKey: UInt32, flags: NSEvent.ModifierFlags) -> [Action] {
+        guard let info = HotkeyChoice.modifierInfo[keyCode] else { return [] }
+        let relevant: NSEvent.ModifierFlags = [.control, .option, .command, .shift, .function]
+        let alone = flags.intersection(relevant) == info.flag
+        // An unrelated modifier event can prove that a selected-key release
+        // was missed. Recover without treating that event as a clean tap.
+        if eventKey != keyCode, !flags.contains(info.flag) { return reconcileMissingRelease() }
+        guard eventKey == keyCode else { return isPressed && !alone ? blockForTyping() : [] }
+        let down = Self.physicalKeyIsDown(keyCode, flags: flags)
+        guard down != isPressed else { return isPressed && !alone ? blockForTyping() : [] }
+        generation &+= 1
+        if down {
+            isPressed = true
+            blocked = !alone
+            activated = false
+            return hold && alone ? [.arm(generation)] : []
+        }
+        let cleanTap = !blocked
+        let wasActivated = activated
+        isPressed = false
+        blocked = false
+        activated = false
+        if hold { return wasActivated ? [.disarm, .finishHold] : [.disarm] }
+        return cleanTap ? [.disarm, .toggle] : [.disarm]
+    }
+
+    mutating func keyDown() -> [Action] { isPressed ? blockForTyping() : [] }
+
+    mutating func arm(generation expected: UInt64) -> [Action] {
+        guard hold, isPressed, !blocked, !activated, generation == expected else { return [] }
+        activated = true
+        return [.beginHold]
+    }
+
+    mutating func reset() {
+        generation &+= 1
+        isPressed = false
+        blocked = false
+        activated = false
+    }
+
+    private mutating func reconcileMissingRelease() -> [Action] {
+        guard isPressed || blocked || activated else { return [] }
+        let wasActivated = activated
+        reset()
+        return hold && wasActivated ? [.disarm, .cancelHold] : [.disarm]
+    }
+
+    private mutating func blockForTyping() -> [Action] {
+        guard !blocked else { return [] }
+        generation &+= 1
+        blocked = true
+        let wasActivated = activated
+        activated = false
+        return wasActivated ? [.disarm, .cancelHold] : [.disarm]
+    }
+
+    private static func physicalKeyIsDown(_ keyCode: UInt32, flags: NSEvent.ModifierFlags) -> Bool {
+        let left: UInt
+        let right: UInt
+        let selected: UInt
+        switch keyCode {
+        case 54, 55:
+            left = UInt(NX_DEVICELCMDKEYMASK); right = UInt(NX_DEVICERCMDKEYMASK)
+            selected = keyCode == 55 ? left : right
+        case 56, 60:
+            left = UInt(NX_DEVICELSHIFTKEYMASK); right = UInt(NX_DEVICERSHIFTKEYMASK)
+            selected = keyCode == 56 ? left : right
+        case 58, 61:
+            left = UInt(NX_DEVICELALTKEYMASK); right = UInt(NX_DEVICERALTKEYMASK)
+            selected = keyCode == 58 ? left : right
+        case 59, 62:
+            left = UInt(NX_DEVICELCTLKEYMASK); right = UInt(NX_DEVICERCTLKEYMASK)
+            selected = keyCode == 59 ? left : right
+        default:
+            return HotkeyChoice.modifierInfo[keyCode].map { flags.contains($0.flag) } ?? false
+        }
+        // Native left/right flags distinguish release from a duplicate event
+        // even while the opposite-side key keeps the aggregate modifier set.
+        if flags.rawValue & (left | right) != 0 { return flags.rawValue & selected != 0 }
+        return HotkeyChoice.modifierInfo[keyCode].map { flags.contains($0.flag) } ?? false
+    }
+}
+
 enum GlobalHotkeyError: LocalizedError {
     case registration(OSStatus)
     case accessibility
@@ -109,8 +208,7 @@ final class GlobalHotkey {
     private var localMonitor: Any?
     private var held = false
     private var running = false
-    private var modifierPressed = false
-    private var modifierBlocked = false
+    private var modifierState: ModifierShortcutState
     private var armTask: Task<Void, Never>?
     private let modifierDelay: TimeInterval
     private let choice: HotkeyChoice
@@ -118,6 +216,7 @@ final class GlobalHotkey {
 
     init(choice: HotkeyChoice = .controlOptionSpace, modifierDelay: TimeInterval = 0.15, onKeyDown: @escaping () -> Void, onKeyUp: @escaping () -> Void, onOtherKey: @escaping () -> Void = {}) {
         self.choice = choice; self.modifierDelay = modifierDelay
+        modifierState = ModifierShortcutState(keyCode: choice.keyCode, hold: modifierDelay > 0)
         self.onKeyDown = onKeyDown; self.onKeyUp = onKeyUp; self.onOtherKey = onOtherKey
     }
     deinit {
@@ -162,42 +261,33 @@ final class GlobalHotkey {
         if let globalMonitor { NSEvent.removeMonitor(globalMonitor) }
         if let localMonitor { NSEvent.removeMonitor(localMonitor) }
         hotkey = nil; handler = nil; globalMonitor = nil; localMonitor = nil; held = false
-        modifierPressed = false; modifierBlocked = false
+        modifierState.reset()
     }
     private func receiveModifierEvent(_ event: NSEvent) {
-        guard running, let info = HotkeyChoice.modifierInfo[choice.keyCode] else { return }
-        if event.type == .keyDown {
-            if modifierPressed { blockModifierForTyping() }
-            return
-        }
-        let all: NSEvent.ModifierFlags = [.control,.option,.command,.shift,.function]
-        let onlyChosenModifier = event.modifierFlags.intersection(all) == info.flag
-        if UInt32(event.keyCode) == choice.keyCode {
-            // The physical key's flagsChanged event toggles its state even if
-            // its opposite-side modifier remains pressed.
-            if modifierPressed {
-                modifierPressed = false
-                armTask?.cancel(); armTask = nil
-                receive(pressed: false)
-                modifierBlocked = false
-            } else if onlyChosenModifier {
-                modifierPressed = true; modifierBlocked = false
-                if modifierDelay <= 0 { receive(pressed: true) }
-                else {
-                    armTask = Task { [weak self] in
-                        do { try await Task.sleep(for: .seconds(self?.modifierDelay ?? 0.15)) } catch { return }
-                        guard let self, self.running, self.modifierPressed, !self.modifierBlocked else { return }
-                        self.receive(pressed: true)
-                    }
-                }
-            }
-        } else if modifierPressed && !onlyChosenModifier { blockModifierForTyping() }
+        guard running else { return }
+        let actions = event.type == .keyDown
+            ? modifierState.keyDown()
+            : modifierState.flagsChanged(keyCode: UInt32(event.keyCode), flags: event.modifierFlags)
+        applyModifierActions(actions)
     }
-    private func blockModifierForTyping() {
-        guard !modifierBlocked else { return }
-        modifierBlocked = true
-        armTask?.cancel(); armTask = nil
-        if held { held = false; onOtherKey() }
+    private func applyModifierActions(_ actions: [ModifierShortcutState.Action]) {
+        for action in actions {
+            switch action {
+            case .arm(let generation):
+                armTask?.cancel()
+                armTask = Task { [weak self] in
+                    do { try await Task.sleep(for: .seconds(self?.modifierDelay ?? 0.15)) } catch { return }
+                    guard let self, self.running, !Task.isCancelled else { return }
+                    self.applyModifierActions(self.modifierState.arm(generation: generation))
+                }
+            case .disarm: armTask?.cancel(); armTask = nil
+            case .beginHold: receive(pressed: true)
+            case .finishHold: receive(pressed: false)
+            case .cancelHold:
+                if held { held = false; onOtherKey() }
+            case .toggle: onKeyDown()
+            }
+        }
     }
     private func receive(pressed: Bool) {
         guard running else { return }

@@ -1,6 +1,7 @@
 import Combine
 import CryptoKit
 import Foundation
+import AVFoundation
 @preconcurrency import WhisperKit
 
 enum SpeechModel: String, CaseIterable, Identifiable, Codable, Sendable {
@@ -230,7 +231,9 @@ final class SpeechEngine: ObservableObject {
         }
     }
 
-    func transcribe(audioURL: URL, vocabulary: [String]) async throws -> String {
+    /// Suspect audio may yield a reviewable draft when its warning has been
+    /// journalled. The caller must retain that warning and never auto-insert.
+    func transcribe(audioURL: URL, vocabulary: [String], allowRepeatedAudio: Bool = false) async throws -> String {
         guard FileManager.default.isReadableFile(atPath: audioURL.path) else { throw SpeechEngineError.invalidAudio }
         if !isReady || loadedModel != selectedModel { try await prepare() }
         guard !isBusy, let engine else { throw SpeechEngineError.busy }
@@ -245,7 +248,11 @@ final class SpeechEngine: ObservableObject {
             // is an audibility floor, not a speech/noise classifier.
             let conversion = Task.detached(priority: .userInitiated) {
                 try Task.checkCancellation()
-                guard try !RepeatedAudioCheck.fileContainsRepeatedAudio(audioURL) else {
+                // A quick release can leave a valid, empty capture file.
+                // Treat that as no speech, so it follows the quiet receipt path.
+                let inputFile = try AVAudioFile(forReading: audioURL)
+                guard inputFile.length > 0 else { throw SpeechEngineError.noSpeech }
+                if !allowRepeatedAudio, try RepeatedAudioCheck.fileContainsRepeatedAudio(audioURL) {
                     throw SpeechEngineError.repeatedAudio
                 }
                 let samples = try AudioProcessor.loadAudioAsFloatArray(fromPath: audioURL.path)

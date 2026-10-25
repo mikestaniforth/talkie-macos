@@ -1,9 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800" role="img" aria-labelledby="title description">
   <title id="title">Talkie Preview — illustrative product overview</title>
-  <desc id="description">Original vector illustration of a native Mac dictation library and recording overlay. All text, times and entries are synthetic. This is not a screenshot or evidence of successful recording or insertion.</desc>
+  <desc id="description">Original vector illustration of a native Mac dictation library, compact glass recording capsule and original Talkie icon with a Dock running indicator. All text, times, input levels and entries are synthetic. This is not a screenshot or evidence of successful recording or insertion.</desc>
   <defs>
     <filter id="window-shadow" x="-10%" y="-15%" width="120%" height="140%"><feDropShadow dx="0" dy="13" stdDeviation="18" flood-color="#29313b" flood-opacity=".13" /></filter>
     <filter id="hud-shadow" x="-20%" y="-35%" width="140%" height="180%"><feDropShadow dx="0" dy="7" stdDeviation="10" flood-color="#29313b" flood-opacity=".13" /></filter>
+    <linearGradient id="hud-glass" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#fff" stop-opacity=".92" /><stop offset=".52" stop-color="#fff" stop-opacity=".61" /><stop offset="1" stop-color="#e9edf1" stop-opacity=".74" /></linearGradient>
+    <linearGradient id="icon-clay" x1=".2" y1="0" x2=".8" y2="1"><stop stop-color="#c76e45" /><stop offset=".42" stop-color="#b85933" /><stop offset="1" stop-color="#9e4221" /></linearGradient>
+    <radialGradient id="icon-light" cx=".3" cy=".15" r=".8"><stop stop-color="#ffd1a1" stop-opacity=".14" /><stop offset="1" stop-color="#ffd1a1" stop-opacity="0" /></radialGradient>
+    <symbol id="talkie-original-icon" viewBox="0 0 1024 1024">
+      <rect x="95" y="88" width="834" height="834" rx="188" fill="url(#icon-clay)" />
+      <rect x="95" y="88" width="834" height="834" rx="188" fill="url(#icon-light)" />
+      <rect x="97" y="90" width="830" height="830" rx="186" fill="none" stroke="#fff" stroke-opacity=".16" stroke-width="3" />
+      <path d="M467 285v347c0 104 74 111 148 65M342 446h296" fill="none" stroke="#fef8ed" stroke-width="94" stroke-linecap="round" stroke-linejoin="round" />
+    </symbol>
     <clipPath id="window-clip"><rect x="48" y="104" width="1104" height="518" rx="13" /></clipPath>
     <style>
       text { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; fill:#25282d; }
@@ -72,11 +81,22 @@
     <text x="1120" y="600" text-anchor="end" class="small secondary">Synthetic preview text</text>
   </g>
 
-  <rect x="420" y="660" width="360" height="64" rx="18" fill="#fff" filter="url(#hud-shadow)" />
-  <circle cx="442" cy="690" r="3" fill="#d94a43" /><text x="459" y="687" class="body semibold">Listening</text><text x="459" y="705" class="small secondary">Selected microphone</text>
-  <g fill="#b35930"><rect x="602" y="682" width="3" height="17" rx="1.5" /><rect x="608" y="682" width="3" height="17" rx="1.5" /><rect x="614" y="682" width="3" height="17" rx="1.5" /><rect x="620" y="682" width="3" height="17" rx="1.5" /><rect x="626" y="682" width="3" height="17" rx="1.5" /><rect x="632" y="682" width="3" height="17" rx="1.5" /></g>
-  <g fill="#e0e2e6"><rect x="638" y="682" width="3" height="17" rx="1.5" /><rect x="644" y="682" width="3" height="17" rx="1.5" /></g>
-  <text x="666" y="696" font-size="12" class="secondary" style="font-variant-numeric:tabular-nums">00:08</text>
-  <rect x="733" y="682" width="26" height="26" rx="7" fill="#f0f1f3" /><rect x="741" y="690" width="10" height="10" rx="1" fill="#626872" />
-  <text x="600" y="766" text-anchor="middle" class="small secondary">Original vector illustration. No recordings or user history are shown.</text>
+  <!-- Synthetic 212 × 44 capsule, with the actual 8-point effect inset. -->
+  <g aria-label="Illustrative compact recording capsule. Synthetic input level and timer.">
+    <rect x="486" y="643" width="228" height="60" rx="30" fill="none" />
+    <rect x="494" y="651" width="212" height="44" rx="22" fill="url(#hud-glass)" filter="url(#hud-shadow)" />
+    <path d="M516 665a3 3 0 0 0-6 0v6a3 3 0 0 0 6 0Z" fill="#d94a43" />
+    <path d="M508 670v1a5 5 0 0 0 10 0v-1m-5 6v4m-3 0h6" fill="none" stroke="#d94a43" stroke-width="1.3" stroke-linecap="round" />
+    <g fill="#4f535a"><rect x="529" y="666" width="2" height="14" rx="1" /><rect x="534" y="666" width="2" height="14" rx="1" /><rect x="539" y="666" width="2" height="14" rx="1" /><rect x="544" y="666" width="2" height="14" rx="1" /><rect x="549" y="666" width="2" height="14" rx="1" /><rect x="554" y="666" width="2" height="14" rx="1" /></g>
+    <g fill="#d9dce1"><rect x="559" y="666" width="2" height="14" rx="1" /><rect x="564" y="666" width="2" height="14" rx="1" /></g>
+    <text x="623" y="677" font-size="12" fill="#4f535a" class="medium" style="font-variant-numeric:tabular-nums">00:08</text>
+    <g aria-label="Stop recording, 28-point control"><rect x="666" y="659" width="28" height="28" rx="14" fill="none" /><rect x="675" y="668" width="10" height="10" rx="1" fill="#4f535a" /></g>
+  </g>
+  <g aria-label="Original Talkie icon and illustrative Dock running indicator. Also visible in Command–Tab.">
+    <use href="#talkie-original-icon" x="481" y="712" width="50" height="50" />
+    <circle cx="506" cy="765" r="2" fill="#626872" />
+    <text x="546" y="735" class="label medium">Dock + Command–Tab</text>
+    <text x="546" y="753" class="small secondary">Visible by default</text>
+  </g>
+  <text x="600" y="790" text-anchor="middle" class="small secondary">Original vector illustration. No recordings or user history are shown.</text>
 </svg>

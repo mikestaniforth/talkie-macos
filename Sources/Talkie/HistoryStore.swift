@@ -106,7 +106,7 @@ final class HistoryStore: ObservableObject {
             session.correctedTranscript = session.kitSnapshot?.corrected(raw) ?? raw
             session.framedTranscript = nil
             session.durationSeconds = durationSeconds ?? session.durationSeconds
-            session.status = .saved
+            session.status = session.captureWarning == nil ? .saved : .interrupted
             session.errorMessage = nil
             session.updatedAt = Date()
             do { try persistSession(session) }
@@ -143,7 +143,7 @@ final class HistoryStore: ObservableObject {
             session.kitSnapshot = chosen
             session.projectKitID = chosen.id
             session.projectKitVersion = chosen.version
-            session.status = .readyToCopy
+            session.status = session.captureWarning == nil ? .readyToCopy : .interrupted
             session.errorMessage = nil
             session.updatedAt = Date()
             try persistSession(session)
@@ -152,11 +152,27 @@ final class HistoryStore: ObservableObject {
         }
     }
 
-    func setStatus(sessionID: UUID, status: DictationStatus, error: String? = nil) throws {
+    /// Journal integrity separately before recognition so no later delivery or
+    /// retry update can relabel this take as fully verified or expire its audio.
+    func markCaptureWarning(sessionID: UUID, warning: String, durationSeconds: Double? = nil) throws {
         try reportingErrors {
             var session = try sessionForUpdate(sessionID)
-            session.status = status
+            session.captureWarning = warning
+            session.status = .interrupted
+            session.durationSeconds = durationSeconds ?? session.durationSeconds
+            session.updatedAt = Date()
+            try persistSession(session)
+            try loadState()
+        }
+    }
+
+    func setStatus(sessionID: UUID, status: DictationStatus, error: String? = nil, durationSeconds: Double? = nil) throws {
+        try reportingErrors {
+            var session = try sessionForUpdate(sessionID)
+            let completed: [DictationStatus] = [.saved, .readyToCopy, .confirmed, .pasteAttempted]
+            session.status = session.captureWarning != nil && completed.contains(status) ? .interrupted : status
             session.errorMessage = error
+            session.durationSeconds = durationSeconds ?? session.durationSeconds
             session.updatedAt = Date()
             try persistSession(session)
             try loadState()
@@ -333,7 +349,7 @@ final class HistoryStore: ObservableObject {
         let loadedKits = try readKits()
         sessions = loadedSessions.sorted { $0.createdAt > $1.createdAt }
         kits = loadedKits.sorted {
-            let order = ["everyday", "meeting-notes", "studio"]
+            let order = ["everyday", "painting-films", "studio"]
             let left = order.firstIndex(of: $0.id) ?? Int.max
             let right = order.firstIndex(of: $1.id) ?? Int.max
             return left == right ? $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending : left < right

@@ -14,7 +14,12 @@ struct TalkieMain {
             dispatchMain()
         }
         let app = NSApplication.shared
-        app.setActivationPolicy(.accessory)
+        let showInDock = TalkieEnvironment.defaults.object(forKey: "showInDock") as? Bool ?? true
+        app.setActivationPolicy(showInDock ? .regular : .accessory)
+        if let iconURL = Bundle.main.url(forResource: "Talkie", withExtension: "icns"),
+           let icon = NSImage(contentsOf: iconURL) {
+            app.applicationIconImage = icon
+        }
         let delegate = TalkieDelegate()
         appDelegate = delegate
         app.delegate = delegate
@@ -105,6 +110,9 @@ final class TalkieDelegate: NSObject, NSApplicationDelegate {
         popover.behavior = .transient
         model.openLibrary = { [weak self] in self?.showLibrary() }
         model.openSettings = { [weak self] in self?.showSettings() }
+        model.$showInDock.removeDuplicates().receive(on: RunLoop.main).sink { [weak self] visible in
+            self?.applyDockVisibility(visible)
+        }.store(in: &subscriptions)
         model.$hudVisible.combineLatest(model.$phase).receive(on: RunLoop.main).sink { [weak self] visible, phase in
             self?.updateHUD(visible)
             self?.statusItem?.button?.image = NSImage(systemSymbolName: phase == .recording ? "mic.fill" : "waveform", accessibilityDescription: "Talkie")
@@ -136,6 +144,16 @@ final class TalkieDelegate: NSObject, NSApplicationDelegate {
         guard let button = statusItem?.button else { return }
         if popover.isShown { popover.performClose(nil) }
         else { model.refreshPermissions(); popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY) }
+    }
+
+    private func applyDockVisibility(_ visible: Bool) {
+        let policy: NSApplication.ActivationPolicy = visible ? .regular : .accessory
+        guard NSApp.activationPolicy() != policy else { return }
+        guard NSApp.setActivationPolicy(policy) else {
+            model.showInDock = NSApp.activationPolicy() == .regular
+            model.error = "Talkie could not change its Dock visibility. Try again in Settings."
+            return
+        }
     }
 
     private func installMainMenu() {
@@ -212,6 +230,7 @@ final class TalkieDelegate: NSObject, NSApplicationDelegate {
             libraryWindow = window
         }
         NSApp.activate(ignoringOtherApps: true)
+        if libraryWindow?.isMiniaturized == true { libraryWindow?.deminiaturize(nil) }
         libraryWindow?.makeKeyAndOrderFront(nil)
     }
 
@@ -234,7 +253,7 @@ final class TalkieDelegate: NSObject, NSApplicationDelegate {
     private func updateHUD(_ visible: Bool) {
         guard visible else { hud?.orderOut(nil); return }
         if hud == nil {
-            let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 510, height: 83), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+            let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 228, height: 60), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
             panel.isFloatingPanel = true
             panel.level = .floating
             panel.isOpaque = false
@@ -248,12 +267,14 @@ final class TalkieDelegate: NSObject, NSApplicationDelegate {
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main
         if let frame = screen?.visibleFrame {
-            hud?.setFrameOrigin(NSPoint(x: frame.midX - 255, y: frame.minY + 28))
+            hud?.setFrameOrigin(NSPoint(x: frame.midX - 114, y: frame.minY + 8))
         }
         hud?.orderFrontRegardless()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { showLibrary(); return false }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if model.unsavedText != nil {

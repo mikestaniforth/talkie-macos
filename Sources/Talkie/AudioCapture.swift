@@ -45,6 +45,12 @@ private final class RecordingWriter: @unchecked Sendable {
     private var failure: Error?
     private var reportedFailure = false
     private var repeatedAudio: RepeatedAudioCheck
+    private var repeatedAudioWasDetected = false
+    private static let repeatedInputWarning = "The input repeated earlier audio. Recording continued, but part of this take may be missing. Listen back before using it."
+
+    var qualityWarning: String? {
+        queue.sync { repeatedAudioWasDetected ? Self.repeatedInputWarning : nil }
+    }
 
     init(url: URL, format: AVAudioFormat) throws {
         repeatedAudio = RepeatedAudioCheck(sampleRate: format.sampleRate, channelCount: Int(format.channelCount))
@@ -56,14 +62,14 @@ private final class RecordingWriter: @unchecked Sendable {
                                commonFormat: format.commonFormat, interleaved: format.isInterleaved)
     }
 
-    func enqueue(_ buffer: AVAudioPCMBuffer, completion: @escaping @Sendable (Double, String?) -> Void) {
+    func enqueue(_ buffer: AVAudioPCMBuffer, completion: @escaping @Sendable (Double, String?, String?) -> Void) {
         guard buffer.frameLength > 0 else { return }
         lock.lock()
         guard accepting else { lock.unlock(); return }
         guard outstandingBuffers < maximumOutstandingBuffers else {
             let message = recordFailureLocked(Self.writerError("The audio writer could not keep up. Recording stopped; some recent audio could not be saved."))
             lock.unlock()
-            if let message { completion(0, message) }
+            if let message { completion(0, message, nil) }
             return
         }
         outstandingBuffers += 1
@@ -75,22 +81,26 @@ private final class RecordingWriter: @unchecked Sendable {
         guard let copy = Self.copyBuffer(buffer) else {
             let message = recordFailure(Self.writerError("An audio buffer could not be copied. Recording stopped; some recent audio could not be saved."))
             finishPendingBuffer()
-            if let message { completion(0, message) }
+            if let message { completion(0, message, nil) }
             return
         }
         queue.async { [self] in
             var message: String?
+            var warning: String?
             do {
                 guard let file else { throw Self.writerError("The recording file closed before this audio could be saved.") }
                 try file.write(from: copy)
-                if isRepeatedInput(copy) {
-                    throw Self.writerError("The microphone input began repeating old audio instead of capturing new sound. Reconnect the microphone or choose another input, then try again. The partial recording has been saved.")
+                if !repeatedAudioWasDetected, isRepeatedInput(copy) {
+                    // Repetition is an integrity warning, not a disk failure.
+                    // Keep the rest of the take: an input stream may recover.
+                    repeatedAudioWasDetected = true
+                    warning = Self.repeatedInputWarning
                 }
             }
             catch { message = recordFailure(error) }
             let meter = Self.level(copy)
             finishPendingBuffer()
-            completion(meter, message)
+            completion(meter, message, warning)
         }
     }
 
@@ -188,6 +198,7 @@ private final class RecordingWriter: @unchecked Sendable {
 final class AudioCapture: ObservableObject {
     @Published private(set) var isRecording = false
     @Published private(set) var level = 0.0
+    @Published private(set) var qualityWarning: String?
     @Published private(set) var devices: [AudioDevice] = []
     @Published var selectedDeviceUID: String?
     var availableDevices: [AudioDevice] { devices }
@@ -276,10 +287,11 @@ final class AudioCapture: ObservableObject {
         let captureWriter = try RecordingWriter(url: url, format: format)
         let sessionID = UUID()
         input.installTap(onBus: 0, bufferSize: 2048, format: format) { [weak self] buffer, _ in
-            captureWriter.enqueue(buffer) { [weak self] meter, error in
+            captureWriter.enqueue(buffer) { [weak self] meter, error, warning in
                 Task { @MainActor [weak self] in
                     guard let self, self.isRecording, self.activeSessionID == sessionID else { return }
                     self.level = meter
+                    if let warning { self.qualityWarning = warning }
                     if let error { self.interrupt("Capture stopped: \(error). Any audio already written has been kept.") }
                 }
             }
@@ -297,6 +309,7 @@ final class AudioCapture: ObservableObject {
         writer = captureWriter
         recordingURL = url
         stoppedWriteError = nil
+        qualityWarning = nil
         activeDeviceUID = Self.stringProperty(chosenDevice, kAudioDevicePropertyDeviceUID)
         activeSessionID = sessionID
         isRecording = true
@@ -344,7 +357,12 @@ final class AudioCapture: ObservableObject {
             engine.inputNode.removeTap(onBus: 0)
             engine.stop()
         }
-        stoppedWriteError = writer?.close() ?? stoppedWriteError
+        if let writer {
+            stoppedWriteError = writer.close() ?? stoppedWriteError
+            // Read after draining so even a warning delivered at the same time
+            // as the user's Stop action is retained.
+            qualityWarning = writer.qualityWarning ?? qualityWarning
+        }
         writer = nil
         engine = nil
         isRecording = false

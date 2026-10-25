@@ -30,4 +30,9 @@ fi
 mkdir -p "$HOME/Applications"
 ditto --norsrc --noextattr "$TASK_APP" "$TASK_DESTINATION"
 codesign --verify --deep --strict "$TASK_DESTINATION"
-printf 'Installed %s. Open it manually when ready.\n' "$TASK_DESTINATION"
+if [ "${TALKIE_LAUNCH_AFTER_INSTALL:-0}" = "1" ]; then
+    open "$TASK_DESTINATION"
+    printf 'Installed and launched %s\n' "$TASK_DESTINATION"
+else
+    printf 'Installed %s. Open it manually when ready.\n' "$TASK_DESTINATION"
+fi

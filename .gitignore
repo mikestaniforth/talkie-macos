@@ -13,7 +13,10 @@ xcuserdata/
 *.caf
 *.m4a
 *.mp3
+*.aif
 *.aiff
+*.aifc
+*.audio
 *.sqlite*
 *.db*
 *.mlmodelc/

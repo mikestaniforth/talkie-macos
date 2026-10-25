@@ -12,12 +12,15 @@ Runtime files are created outside the repository in `~/Library/Application Suppo
 
 | Location | Contents |
 | --- | --- |
-| `history.sqlite3` and journal files | Raw, corrected and framed transcripts, timestamps, delivery status, selected Project Kit snapshot, target app name and bundle ID, local audio path, and errors |
+| `history.sqlite3` and journal files | Raw, corrected and framed transcripts, timestamps, delivery status, selected Project Kit snapshot, target app name and bundle ID, local audio path, persistent capture-quality warnings and errors |
 | `Recordings/` | Captured dictation audio |
 | `microphone-test.caf` | Most recent microphone test, at the data folder root; separate from history retention, kept until overwritten by the next test or manually removed |
 | `Models/` | Downloaded model and tokenizer assets |
+| `Sounds/` | A managed local copy of an optional custom activation chime |
 
 Preferences use the separate `local.talkie.preview` UserDefaults suite. This preview does not automatically import another installation's history, preferences or models. Build intermediates and the local application artifact use `~/Library/Caches/talkie-preview-build/`.
+
+Choosing a custom chime reads the selected audio file and copies it into `Sounds/`. The `customActivationSoundFile` preference stores only the managed filename; the original filename and path are not persisted. The audio is not uploaded or added to the repository. **Use default** clears the preference and attempts to remove the managed copy; a local storage failure is reported if removal fails. Cancelling the chooser keeps the previous selection.
 
 History is intentionally recoverable. Current retention keeps unpinned text for 30 days and routine audio for 24 hours; pinned text and unresolved recovery can be retained longer. Successfully transcribed audio can also be removed early when the audio storage cap is exceeded; pinning text does not preserve its audio indefinitely. Retention runs while the app runs. Review the Library and remove items when appropriate. This is not an encrypted vault: macOS user permissions and the Mac's disk encryption govern access to stored data.
 

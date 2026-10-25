@@ -52,21 +52,6 @@ private struct ShortcutKeycaps: View {
     }
 }
 
-private struct InputLevelMeter: View {
-    let level: Double
-    var body: some View {
-        HStack(spacing: 3) {
-            ForEach(0..<12) { index in
-                RoundedRectangle(cornerRadius: 1.5)
-                    .fill(Double(index) / 12 < min(1, max(0, level)) ? talkieAccent : Color.primary.opacity(0.10))
-                    .frame(width: 3, height: 16)
-            }
-        }
-        .accessibilityElement(children: .ignore).accessibilityLabel("Microphone input level")
-        .accessibilityValue("\(Int(min(1, max(0, level)) * 100)) percent")
-    }
-}
-
 struct TalkieMenuView: View {
     @ObservedObject var model: AppModel
     private var isListening: Bool { model.phase == .recording || model.phase == .testing }
@@ -154,41 +139,101 @@ struct RecordingHUD: View {
     private var latest: DictationSession? {
         model.history.sessions.first { $0.id == model.selectedSessionID } ?? model.history.sessions.first
     }
-    private var elapsed: String {
-        let seconds = max(0, Int(model.recordingElapsed))
-        return String(format: "%02d:%02d", seconds / 60, seconds % 60)
+    private var copyText: String? {
+        if model.hudNotice != nil { return model.unsavedText }
+        guard let text = model.unsavedText ?? latest?.displayTranscript, !text.isEmpty else { return nil }
+        return text
     }
-    var body: some View {
-        HStack(spacing: 13) {
-            if model.phase == .recording {
-                Circle().fill(.red).frame(width: 6, height: 6).accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Listening").fontWeight(.medium)
-                    Text(model.microphoneName).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
-                }.frame(maxWidth: 165, alignment: .leading)
-                InputLevelMeter(level: model.audio.level)
-                Text(elapsed).font(.system(size: 12)).monospacedDigit().foregroundStyle(.secondary)
-                    .accessibilityLabel("Recording time \(elapsed)")
-                Button { Task { await model.finishRecording() } } label: { Image(systemName: "stop.fill") }
-                    .buttonStyle(.borderless).help("Finish dictation").accessibilityLabel("Finish dictation")
-            } else if model.phase == .starting || model.phase == .transcribing {
-                ProgressView().controlSize(.small)
-                Text(model.message).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                Image(systemName: model.unsavedText != nil ? "exclamationmark.triangle" : latest.map { deliverySymbol($0.status) } ?? "waveform")
-                    .foregroundStyle(model.unsavedText != nil ? Color.orange : .secondary)
-                Text(model.message).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
-                if let text = model.unsavedText ?? latest?.displayTranscript, !text.isEmpty {
-                    Button("Copy") { model.copy(text) }.controlSize(.small)
-                }
-                Button { model.hudVisible = false } label: { Image(systemName: "xmark") }
-                    .buttonStyle(.borderless).help("Dismiss").accessibilityLabel("Dismiss recording status")
+
+    private var compactReceipt: String {
+        if let notice = model.hudNotice { return notice.title }
+        if model.unsavedText != nil { return "Not saved" }
+        if model.message.hasPrefix("Copied to clipboard") { return "Copied" }
+        // These transient messages can precede a new selected history entry.
+        // Preserve them before consulting an older receipt's persisted status.
+        if model.message.hasPrefix("Could not") { return "Couldn’t record" }
+        if model.message.hasPrefix("Retry needs attention") { return "Retry needed" }
+        if let latest, latest.captureWarning != nil {
+            return latest.displayTranscript.isEmpty ? "Review audio" : "Review text"
+        }
+        if model.message.hasPrefix("Recovered ·") { return "Review text" }
+        if let latest {
+            switch latest.status {
+            case .confirmed: return "Inserted"
+            case .pasteAttempted: return "Check paste"
+            case .readyToCopy: return "Ready to copy"
+            case .saved: return "Saved"
+            case .interrupted: return latest.displayTranscript.isEmpty ? "Review audio" : "Review text"
+            case .transcriptionFailed: return "Retry needed"
+            case .notSaved: return "Not saved"
+            case .recording: break
             }
         }
-        .font(.system(size: 13)).padding(.horizontal, 17).padding(.vertical, 12)
-        .frame(minWidth: 300, maxWidth: 490, minHeight: 57)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
-        .padding(8).tint(talkieAccent)
+        // A status write can itself fail; retain a truthful compact fallback.
+        if model.message.hasPrefix("Saved · Review incomplete audio") { return "Review text" }
+        if model.message.hasPrefix("Saved · Review recording") { return "Review audio" }
+        if model.message.hasPrefix("Saved · Check paste") { return "Check paste" }
+        if model.message.hasPrefix("Recording kept") { return "Retry needed" }
+        return model.message
+    }
+
+    private var presentation: RecordingHUDPresentation {
+        let activity: RecordingHUDPresentation.Activity
+        if model.hudNotice != nil && model.phase != .recording && model.phase != .testing {
+            activity = .receipt
+        } else {
+            switch model.phase {
+            case .recording: activity = .recording
+            case .testing: activity = .testing
+            case .starting: activity = .starting
+            case .transcribing: activity = .transcribing
+            case .idle: activity = .receipt
+            }
+        }
+        let liveWarning = (model.phase == .recording || model.phase == .testing) && model.audio.qualityWarning != nil
+        let receiptWarning = model.phase == .idle && (model.unsavedText != nil || (model.hudNotice == nil
+            && (latest?.status.needsRecovery == true || latest?.captureWarning != nil
+                || ["Retry needed", "Review audio", "Review text", "Couldn’t record"].contains(compactReceipt))))
+        let warning = liveWarning || receiptWarning
+        let symbol: String
+        if warning { symbol = "exclamationmark.circle" }
+        else if let notice = model.hudNotice { symbol = notice.symbolName }
+        else if compactReceipt == "Inserted" { symbol = "checkmark.circle" }
+        else if compactReceipt == "Check paste" { symbol = "arrow.up.doc" }
+        else if compactReceipt == "Copied" || copyText != nil { symbol = "doc.on.doc" }
+        else { symbol = "waveform" }
+        var detailParts: [String] = []
+        if let notice = model.hudNotice {
+            detailParts.append(notice.detail)
+        } else if model.phase == .recording || model.phase == .testing {
+            detailParts.append("Listening with \(model.microphoneName). \(model.message)")
+        } else {
+            detailParts.append(model.message)
+        }
+        let warnings: [String?] = model.phase == .recording || model.phase == .testing
+            ? [model.audio.qualityWarning]
+            : model.hudNotice == nil ? [latest?.captureWarning, latest?.errorMessage] : []
+        for case let warning? in warnings where !detailParts.contains(warning) {
+            detailParts.append(warning)
+        }
+        return RecordingHUDPresentation(activity: activity, elapsed: model.recordingElapsed, level: model.audio.level,
+                                        label: compactReceipt, detail: detailParts.joined(separator: " "), symbolName: symbol,
+                                        isWarning: warning, canCopy: copyText != nil)
+    }
+
+    var body: some View {
+        RecordingHUDSurface(presentation: presentation, onStop: {
+            Task {
+                if model.phase == .testing { await model.finishMicTest() }
+                else { await model.finishRecording() }
+            }
+        }, onCopy: {
+            if let text = copyText { model.copy(text) }
+        }, onDismiss: {
+            model.hudVisible = false
+        }, onOpenLibrary: {
+            model.openLibrary?()
+        })
     }
 }
 
@@ -314,6 +359,13 @@ struct TranscriptDetail: View {
     @ViewState private var deleteRequested = false
     private var currentText: String { original ? session.rawTranscript ?? "" : session.displayTranscript }
     private var hasFrame: Bool { session.kitSnapshot.map { !$0.prefix.isEmpty || !$0.suffix.isEmpty } ?? false }
+    private var recoveryNotice: String? {
+        var parts: [String] = []
+        for case let part? in [session.captureWarning, session.errorMessage] where !parts.contains(part) {
+            parts.append(part)
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 15) {
@@ -345,7 +397,7 @@ struct TranscriptDetail: View {
                 }
             }.padding(.horizontal, 28).padding(.top, 28).padding(.bottom, 20)
             Divider()
-            if let error = session.errorMessage {
+            if let error = recoveryNotice {
                 Label(error, systemImage: "exclamationmark.circle")
                     .font(.callout).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 28).padding(.top, 18)
@@ -554,16 +606,30 @@ struct SettingsWindow: View {
             }
             Section {
                 Toggle("Activation sound", isOn: $model.soundEnabled)
+                HStack(spacing: 10) {
+                    Text("Chime")
+                    Spacer()
+                    Text(model.activationSoundLabel).foregroundStyle(.secondary)
+                    Button("Choose…") { model.chooseActivationSound() }
+                    Button("Use default") { model.useDefaultActivationSound() }
+                        .disabled(model.customActivationSoundFile == nil && model.activationSoundNotice == nil)
+                }
                 HStack(spacing: 14) {
                     Text("Volume")
                     Slider(value: $model.soundVolume, in: 0...1).accessibilityLabel("Activation sound volume")
                     Button("Preview") { model.playActivationSound() }
                 }.disabled(!model.soundEnabled)
+                if let notice = model.activationSoundNotice {
+                    Text(notice).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
             } header: { Text("Sound") } footer: {
-                Text("The cue plays when the microphone is ready. Wait for it before speaking.")
-            }
+                Text("The cue plays when the microphone is ready. Wait for it before speaking. Custom audio stays on this Mac.")
+            }.disabled(model.phase != .idle || model.isChoosingActivationSound || model.isRecordingShortcut)
             Section {
+                Toggle("Show Talkie in Dock", isOn: $model.showInDock).disabled(model.phase != .idle)
                 Toggle("Launch Talkie at login", isOn: Binding(get: { model.launchAtLogin }, set: { model.setLogin($0) }))
+            } header: { Text("Visibility") } footer: {
+                Text("Showing the Dock icon also adds Talkie to Command–Tab. Talkie keeps running when you close its windows.")
             }
         }.formStyle(.grouped)
     }

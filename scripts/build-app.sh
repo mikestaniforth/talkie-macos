@@ -33,11 +33,11 @@ cat > "$TASK_APP/Contents/Info.plist" <<'PLIST'
 <key>CFBundleDisplayName</key><string>Talkie Preview</string>
 <key>CFBundleExecutable</key><string>Talkie</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>1.1.0</string>
-<key>CFBundleVersion</key><string>2</string>
+<key>CFBundleShortVersionString</key><string>1.1.4</string>
+<key>CFBundleVersion</key><string>6</string>
 <key>CFBundleIconFile</key><string>Talkie.icns</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
-<key>LSUIElement</key><true/>
+<key>LSUIElement</key><false/>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSMicrophoneUsageDescription</key><string>Talkie Preview records your voice only while you dictate or run a microphone test. Speech recognition runs locally on your Mac.</string>
 <key>NSAccessibilityUsageDescription</key><string>Talkie Preview inserts your saved dictation into the text field you selected.</string>

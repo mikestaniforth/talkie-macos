@@ -143,6 +143,9 @@ struct DictationSession: Codable, Hashable, Identifiable, Sendable {
     var audioPath: String?
     var durationSeconds: Double?
     var isPinned: Bool
+    // Independent from delivery/recognition errors; retries and formatting must
+    // not erase an unresolved capture-integrity warning from the original take.
+    var captureWarning: String? = nil
 
     var audioURL: URL? { audioPath.map { URL(fileURLWithPath: $0) } }
     var displayTranscript: String { framedTranscript ?? correctedTranscript ?? rawTranscript ?? "" }

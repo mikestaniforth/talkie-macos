@@ -16,6 +16,7 @@ struct CoreHarness {
         let tests: [(String, () throws -> Void)] = [
             ("SQLite restart preserves transcript versions and insertion status", restart),
             ("Startup recovers interrupted recording; refresh preserves active take", interrupted),
+            ("Capture warning and full duration survive restart without inventing text", captureWarning),
             ("Project Kit edits preserve captured versions", kitVersions),
             ("Corrections respect boundaries, code, links, email and paths", correctionBoundaries),
             ("Longest phrase wins; frame text stays exact and literal", exactFrames),
@@ -52,6 +53,40 @@ struct CoreHarness {
     private static func recordFixture(_ session: DictationSession) throws {
         guard let audio = session.audioURL else { throw CoreCheckFailure(description: "No journaled recording path") }
         try Data("synthetic audio fixture".utf8).write(to: audio)
+    }
+
+    private static func captureWarning() throws {
+        try fixture { folder in
+            var sessionID = UUID()
+            do {
+                let store = HistoryStore(directory: folder)
+                let take = try store.beginSession()
+                sessionID = take.id
+                try recordFixture(take)
+                try store.markCaptureWarning(sessionID: take.id,
+                                             warning: "Synthetic input quality warning", durationSeconds: 18.5)
+            }
+            let reopened = HistoryStore(directory: folder)
+            guard let saved = reopened.sessions.first(where: { $0.id == sessionID }) else {
+                throw CoreCheckFailure(description: "Capture warning take was lost")
+            }
+            try require(saved.durationSeconds == 18.5 && saved.status == .interrupted, "Full take duration or review status lost")
+            try require(saved.captureWarning == "Synthetic input quality warning", "Integrity warning lost")
+            try require(saved.rawTranscript == nil && saved.displayTranscript.isEmpty, "Unreviewed audio became invented text")
+            try require(saved.audioURL.map { FileManager.default.fileExists(atPath: $0.path) } == true, "Review audio was removed")
+            _ = try reopened.updateTranscript(sessionID: sessionID, raw: "Synthetic recovered text")
+            _ = try reopened.applyFrame(sessionID: sessionID, kit: ProjectKit(name: "Synthetic", prefix: "Frame"))
+            try reopened.setStatus(sessionID: sessionID, status: .confirmed)
+            try reopened.runRetention(now: saved.createdAt.addingTimeInterval(31 * 86_400))
+            let last = HistoryStore(directory: folder).sessions.first { $0.id == sessionID }
+            try require(last?.captureWarning == saved.captureWarning && last?.status == .interrupted, "Retry/frame/delivery erased the capture warning")
+            try require(last?.rawTranscript == "Synthetic recovered text", "Recovered original text was lost")
+            try require(last?.audioURL.map { FileManager.default.fileExists(atPath: $0.path) } == true, "Retention removed unresolved review audio")
+            var legacy = try JSONSerialization.jsonObject(with: JSONEncoder().encode(saved)) as! [String: Any]
+            legacy.removeValue(forKey: "captureWarning")
+            let decoded = try JSONDecoder().decode(DictationSession.self, from: JSONSerialization.data(withJSONObject: legacy))
+            try require(decoded.captureWarning == nil && decoded.id == saved.id, "Legacy history cannot decode without the new optional field")
+        }
     }
 
     private static func restart() throws {

@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800" role="img" aria-labelledby="title description">
+  <title id="title">Talkie Preview — illustrative product overview</title>
+  <desc id="description">Original vector illustration of a native Mac dictation library and recording overlay. All text, times and entries are synthetic. This is not a screenshot or evidence of successful recording or insertion.</desc>
+  <defs>
+    <filter id="window-shadow" x="-10%" y="-15%" width="120%" height="140%"><feDropShadow dx="0" dy="13" stdDeviation="18" flood-color="#29313b" flood-opacity=".13" /></filter>
+    <filter id="hud-shadow" x="-20%" y="-35%" width="140%" height="180%"><feDropShadow dx="0" dy="7" stdDeviation="10" flood-color="#29313b" flood-opacity=".13" /></filter>
+    <clipPath id="window-clip"><rect x="48" y="104" width="1104" height="518" rx="13" /></clipPath>
+    <style>
+      text { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; fill:#25282d; }
+      .secondary { fill:#626872; } .small { font-size:11px; } .label { font-size:12px; } .body { font-size:13px; }
+      .medium { font-weight:550; } .semibold { font-weight:650; }
+      .icon { fill:none; stroke:#626872; stroke-width:1.45; stroke-linecap:round; stroke-linejoin:round; }
+      .rule { stroke:#dfe1e5; stroke-width:1; }
+    </style>
+  </defs>
+  <rect width="1200" height="800" fill="#f4f5f7" />
+  <g transform="translate(48 40)">
+    <rect width="30" height="30" rx="8" fill="#b35930" />
+    <path d="M13 7v14q0 6 7 3M8.5 13.5h13" fill="none" stroke="#fff7ee" stroke-width="3.5" stroke-linecap="round" />
+    <text x="42" y="22" font-size="23" class="semibold">Talkie Preview</text>
+  </g>
+  <text x="1152" y="61" text-anchor="end" font-size="12" class="secondary">Illustrative interface · Synthetic text</text>
+
+  <rect x="48" y="104" width="1104" height="518" rx="13" fill="#fff" filter="url(#window-shadow)" />
+  <g clip-path="url(#window-clip)">
+    <rect x="48" y="104" width="1104" height="44" fill="#eeeff1" />
+    <circle cx="68" cy="126" r="5.5" fill="#ff6059" /><circle cx="87" cy="126" r="5.5" fill="#febc2e" /><circle cx="106" cy="126" r="5.5" fill="#28c840" />
+    <g class="icon" transform="translate(136 119)"><rect width="18" height="13" rx="2" /><path d="M6 0v13" /></g>
+    <text x="176" y="131" class="body semibold">Library</text>
+    <g class="icon" transform="translate(975 118)"><path d="m5 0 7 3-3 5 3 3-1 1-4-2-3 5-1-1 3-5-4-3 1-1 3 1Z" /></g>
+    <rect x="1007" y="113" width="113" height="27" rx="6" fill="#fff" stroke="#d0d3d8" />
+    <g class="icon" transform="translate(1019 119)"><rect x="3" width="8" height="10" rx="1.5" /><path d="M7 13H0V4" /></g>
+    <text x="1040" y="131" class="label medium">Copy text</text>
+    <path d="M48 148h1104" class="rule" />
+
+    <rect x="48" y="149" width="184" height="473" fill="#f0f1f3" />
+    <text x="69" y="177" class="small secondary medium">Library</text>
+    <rect x="59" y="188" width="161" height="30" rx="6" fill="#dde0e5" />
+    <g class="icon" transform="translate(72 198)"><path d="M0 3 3 0h10l3 3v8H0ZM0 5h5l1 3h4l1-3h5" /></g>
+    <text x="98" y="207" class="body semibold">All dictations</text>
+    <g class="icon" transform="translate(80 236)"><circle r="7" /><path d="M0-3v4m0 2v.2" /></g>
+    <text x="98" y="240" class="body">Needs attention</text>
+    <g class="icon" transform="translate(73 260)"><path d="m5 0 7 3-3 5 3 3-1 1-4-2-3 5-1-1 3-5-4-3 1-1 3 1Z" /></g>
+    <text x="98" y="273" class="body">Pinned</text>
+    <text x="69" y="323" class="small secondary medium">Projects</text>
+    <g class="icon" transform="translate(72 340)"><path d="M0 2h6l2 2h8v10H0ZM0 2V0h6l2 2" /></g><text x="98" y="351" class="body">Everyday</text>
+    <g class="icon" transform="translate(72 373)"><path d="M0 2h6l2 2h8v10H0ZM0 2V0h6l2 2" /></g><text x="98" y="384" class="body">Studio</text>
+    <g class="icon" transform="translate(72 406)"><path d="M0 2h6l2 2h8v10H0ZM0 2V0h6l2 2" /></g><text x="98" y="417" class="body">Meeting notes</text>
+    <g class="icon" transform="translate(72 463)"><rect x="3" width="12" height="10" rx="2" /><path d="M0 4v9h11" /></g><text x="98" y="474" class="body">Project Kits</text>
+    <text x="69" y="599" class="small secondary">Stored on this Mac</text>
+    <path d="M232 149v473" class="rule" />
+
+    <rect x="233" y="149" width="248" height="473" fill="#fafbfc" />
+    <text x="250" y="178" class="body semibold">All dictations</text><text x="461" y="178" text-anchor="end" class="label secondary">3</text>
+    <rect x="247" y="190" width="219" height="29" rx="6" fill="#fff" stroke="#d9dce2" />
+    <g class="icon" transform="translate(260 199)"><circle cx="4" cy="4" r="4" /><path d="m7 7 3 3" /></g><text x="281" y="209" class="label secondary">Search dictations</text>
+    <rect x="243" y="232" width="228" height="126" rx="8" fill="#ece4de" />
+    <text class="body medium" x="256" y="255">The opening shot should hold</text><text class="body medium" x="256" y="274">for a moment before the</text><text class="body medium" x="256" y="293">camera moves.</text><g class="icon" transform="translate(257 315)"><rect x="3" width="7" height="9" rx="1" /><path d="M6 12H0V3" /></g><text x="276" y="325" class="small secondary">Ready to copy</text>
+    <text x="256" y="345" class="small secondary">Illustrative entry · 00:08</text>
+    <text class="body medium" x="256" y="391">Use a softer light on the</text><text class="body medium" x="256" y="410">background. Keep the</text><text class="body medium" x="256" y="429">foreground still.</text><text x="256" y="456" class="small secondary">Saved · Illustrative entry</text><path d="M250 478h213" class="rule" />
+    <text class="body medium" x="256" y="507">Add a short pause before</text><text class="body medium" x="256" y="526">the final line.</text><text x="256" y="554" class="small secondary">Paste attempted · Illustrative entry</text><path d="M481 149v473" class="rule" />
+
+    <rect x="482" y="149" width="670" height="473" fill="#fff" />
+    <text x="514" y="188" font-size="22" class="semibold">Saved dictation</text><text x="1120" y="186" text-anchor="end" class="label secondary">Ready to copy</text>
+    <text x="514" y="213" class="label secondary">Illustrative entry · 8 sec</text>
+    <rect x="514" y="235" width="246" height="29" rx="6" fill="#eeeef0" stroke="#dedfe3" />
+    <rect x="516" y="237" width="85" height="25" rx="4" fill="#fff" stroke="#d9dbe0" stroke-width=".5" />
+    <text x="558" y="254" text-anchor="middle" class="label medium">Output</text><text x="680" y="254" text-anchor="middle" class="label secondary">Original transcription</text>
+    <text x="1120" y="254" text-anchor="end" class="label secondary">Everyday</text><path d="M482 285h670" class="rule" />
+    <text font-size="18" x="514" y="329">The opening shot should hold for a moment</text><text font-size="18" x="514" y="358">before the camera moves.</text><text font-size="18" x="514" y="407">Keep the frame simple, with enough room</text><text font-size="18" x="514" y="436">for the title.</text><path d="M482 571h670" class="rule" />
+    <g class="icon" transform="translate(515 588)"><circle cx="7" cy="7" r="7" /><path d="m5 3 5 4-5 4Z" /></g><text x="538" y="600" class="label">Play recording</text>
+    <text x="1120" y="600" text-anchor="end" class="small secondary">Synthetic preview text</text>
+  </g>
+
+  <rect x="420" y="660" width="360" height="64" rx="18" fill="#fff" filter="url(#hud-shadow)" />
+  <circle cx="442" cy="690" r="3" fill="#d94a43" /><text x="459" y="687" class="body semibold">Listening</text><text x="459" y="705" class="small secondary">Selected microphone</text>
+  <g fill="#b35930"><rect x="602" y="682" width="3" height="17" rx="1.5" /><rect x="608" y="682" width="3" height="17" rx="1.5" /><rect x="614" y="682" width="3" height="17" rx="1.5" /><rect x="620" y="682" width="3" height="17" rx="1.5" /><rect x="626" y="682" width="3" height="17" rx="1.5" /><rect x="632" y="682" width="3" height="17" rx="1.5" /></g>
+  <g fill="#e0e2e6"><rect x="638" y="682" width="3" height="17" rx="1.5" /><rect x="644" y="682" width="3" height="17" rx="1.5" /></g>
+  <text x="666" y="696" font-size="12" class="secondary" style="font-variant-numeric:tabular-nums">00:08</text>
+  <rect x="733" y="682" width="26" height="26" rx="7" fill="#f0f1f3" /><rect x="741" y="690" width="10" height="10" rx="1" fill="#626872" />
+  <text x="600" y="766" text-anchor="middle" class="small secondary">Original vector illustration. No recordings or user history are shown.</text>
+</svg>

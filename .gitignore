@@ -1,0 +1,41 @@
+# Generated build output and editor state
+.DS_Store
+.build/
+.swiftpm/
+build/
+dist/
+*.xcuserstate
+xcuserdata/
+
+# Local runtime data and models
+*.wav
+!Sources/Talkie/Resources/activate.wav
+*.caf
+*.m4a
+*.mp3
+*.aiff
+*.sqlite*
+*.db*
+*.mlmodelc/
+*.mlpackage/
+models/
+Models/
+recordings/
+Recordings/
+logs/
+*.log
+*.app/
+
+# Credentials and local configuration
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.mobileprovision
+*.keystore
+credentials*.json
+service-account*.json
+secrets/
+private/

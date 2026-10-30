@@ -1,15 +1,23 @@
 # Building and verification
 
-See [VERIFICATION.md](VERIFICATION.md) for the dated results of this source snapshot.
+See [VERIFICATION.md](VERIFICATION.md) for dated evidence and [REVIEW.md](REVIEW.md) for a fresh clone, first-run setup, manual acceptance and a report template. Results from an earlier snapshot do not verify the current source.
 
 ## Requirements
 
-- Runtime deployment target: macOS 14 or newer; Apple Silicon is the intended configuration.
-- A compatible Swift 6 toolchain with a macOS 26 or later SDK, such as Xcode 26 or compatible Command Line Tools. The source references the native glass API behind a runtime availability check, so an older SDK is insufficient even though the deployment target is macOS 14. The package uses Swift 5 language mode.
-- Internet for initial dependency resolution and the separately requested model setup.
-- Full Xcode for XCTest. The standalone harnesses also work with compatible Command Line Tools.
+- Runtime deployment target: macOS 14 or newer; Apple Silicon is the intended configuration. The build host must also support the selected developer tools.
+- **Swift 6 and the macOS 26 SDK or newer**, such as Xcode 26 or compatible Command Line Tools. The package uses Swift 5 language mode. A runtime availability check for native glass does not make an older SDK sufficient to compile it.
+- Internet for initial dependency resolution and the separately requested model/tokenizer setup. No account or API key is required.
+- Full Xcode for XCTest. Compatible Command Line Tools can run the standalone harnesses and build script, but do not include the XCTest module.
 
-The standalone checks and release build were run with Swift 6.4 and the macOS 27 SDK from Command Line Tools. Other toolchain/SDK combinations have not been verified for this snapshot. Systems earlier than macOS 26 use the native material overlay fallback at runtime.
+Check the selected tools before building:
+
+```sh
+xcode-select -p
+swift --version
+xcrun --sdk macosx --show-sdk-version
+```
+
+If full Xcode is installed but these commands select older tools, choose the intended Command Line Tools version in Xcode's settings. The scripts use the selected `swift` toolchain. The current recorded environment is Swift 6.4 with the macOS 27 SDK; other toolchain combinations are not established by those results.
 
 ## Automated checks
 
@@ -23,38 +31,40 @@ scripts/test-capture.sh
 scripts/build-app.sh
 ```
 
-These checks use temporary synthetic fixtures. They do not register global hotkeys, record the microphone, install or launch the app, or insert text into another application. The capture harness exercises the production file writer with generated samples, including continued writing after a quality warning. The shortcut harness exercises stored choices and modifier event/state transitions without monitoring the keyboard. With full Xcode, also run `swift test`.
-
-The build script stages a generated mirror outside the checkout to avoid cloud-folder metadata and file hydration interfering with compilation and ad hoc signing. `dist/Talkie Preview.app` links to the artifact in `~/Library/Caches/talkie-preview-build/Artifacts/`. Do not edit that mirror. The app is locally signed for development; it is not Developer ID signed or notarised.
-
-## Running the preview
-
-After a successful build, run `scripts/install-app.sh` explicitly to install to `~/Applications/Talkie Preview.app`. It does not launch automatically. Open that app yourself, enable microphone and insertion permissions, choose an input, and install a model in Settings. Rebuilding an ad hoc signed app can require macOS permissions to be granted again.
-
-Launching after installation is an explicit option:
+The 1.1.5 standalone suite contains **228 checks**: 10 history/Project Kit, 110 shortcut, 12 audibility, 82 repeated-input, 9 capture-configuration and 5 writer checks. The last three groups run through `test-capture.sh`. Consult [VERIFICATION.md](VERIFICATION.md) for the dated actual results. With full Xcode, also run:
 
 ```sh
-TALKIE_LAUNCH_AFTER_INSTALL=1 scripts/install-app.sh
+swift test
 ```
 
-This launches only `~/Applications/Talkie Preview.app`. Automated source verification does not run the installer or use this option.
+The harnesses use temporary synthetic fixtures and production source. They do not register global hotkeys, monitor the keyboard, record a microphone, download a speech model, install or launch the app, or insert text into another application. Generated audio and file-writer checks do not establish microphone compatibility or natural-voice accuracy. `swift test` remains a separate check even when all standalone checks pass.
 
-The original app icon is shown in the Dock and Command–Tab by default. General settings offers **Show Talkie in Dock** for choosing between that behavior and menu-bar-only operation. Closing windows keeps the app running.
+The release build stages a generated source mirror outside the checkout to avoid cloud-folder metadata and hydration interfering with compilation and signing. Edit repository sources, not that mirror. `dist/Talkie Preview.app` links to the artifact under `~/Library/Caches/talkie-preview-build/Artifacts/`. The script creates and verifies an ad hoc signature. It is not Developer ID signed or notarised.
 
-The preview is isolated by its `local.talkie.preview` bundle ID, preferences suite, Application Support directory and build cache. It does not read another Talkie installation's data or models. Run one dictation app at a time, or choose distinct shortcuts: apps still share the system clipboard and global hotkey namespace.
+## Explicit installation and first run
 
-## Manual acceptance checks
+After a successful build, quit any running Talkie Preview and install deliberately:
 
-Use a disposable note and synthetic speech content. Do not test in a message you might accidentally send.
+```sh
+scripts/install-app.sh
+open "$HOME/Applications/Talkie Preview.app"
+```
 
-1. Confirm the Dock icon and Command–Tab entry appear on first launch. Close windows, reopen from the Dock, and verify the Library returns. Toggle **Show Talkie in Dock** off and on, then relaunch and confirm the preference persists.
-2. Record a custom shortcut in Settings; confirm persistence, cancellation and conflict handling. Command–V must remain reserved for delivery. Exercise hold and toggle modes, early release, repeated presses, opposite-side modifier keys and using a modifier with another key.
-3. Check the selected input, bundled cue and input meter. In General settings, choose a readable local audio chime up to 10 seconds and 5 MB, preview it, adjust its volume and verify it persists after relaunch. Cancel the chooser and try an invalid file; the previous choice should remain. Use **Use default** to restore the bundled cue. Confirm the custom copy stays in this preview's local data folder and no original source path is stored. Record a short sentence, then a longer passage with pauses. Listen back and compare the entire transcript. A moving meter or full file duration alone does not establish complete capture.
-4. Check the recording overlay's elapsed time, Stop control and processing/delivery states in light and dark appearance. Enable Reduce Transparency, Increase Contrast and Reduce Motion and verify the surface remains readable and usable without taking focus from the target field.
-5. Exercise a disconnected input and sleep/wake interruptions. If a repeated-input warning occurs, verify recording continues until stopped, the captured file remains available, and nothing is inserted automatically. An audible suspect take may produce an automatic draft labelled for review. Listen back and review that draft, or use Retry deliberately, before copying recovered text.
-6. Check insertion in native editors and browser text fields. Move focus, edit text or move the caret during recognition; the app should preserve the take rather than insert into an unexpected destination. Confirm the clipboard now contains the transcript; the previous clipboard is not restored.
-7. Confirm raw text remains recoverable after corrections and framing. Retry saved audio, copy text, pin a take and remove a take.
-8. Record quiet input or a take with no recognisable speech. Verify a brief **Too quiet** or **No speech** overlay notice appears, the take remains in the Library and the next shortcut works without dismissing an error alert. Check the same recovery behavior when Retry produces one of these outcomes. Unexpected storage or model failures should still remain visible for attention.
-9. After model setup, disconnect networking and verify recognition still works.
+The installer verifies the preview identity/signature, installs to `~/Applications/Talkie Preview.app` and keeps a backup when replacing an existing preview. It does not launch automatically. `TALKIE_LAUNCH_AFTER_INSTALL=1 scripts/install-app.sh` is an explicit install-and-launch option; automated checks must not use it.
 
-Automated checks cannot establish hardware compatibility, natural-voice accuracy or insertion behavior in every third-party application.
+Follow [REVIEW.md](REVIEW.md) to enable Microphone and Accessibility access, select an input, download and load a local model, and test a disposable field. An ad hoc rebuild can require the installed app's permission grant to be refreshed. A terminal-launched `--self-check` process is not proof that the GUI has the same permission state.
+
+The preview uses `local.talkie.preview` for its bundle identity and preferences, its own Application Support directory including `Models/`, and the separate build cache above. Do not copy another installation's model, preferences or history into it. Apps still share global shortcuts and the system clipboard, so run one dictation app at a time or assign distinct shortcuts.
+
+## Manual acceptance
+
+Use the [input and editor matrix](REVIEW.md#manual-review-matrix) with disposable, non-sensitive speech. In particular, verify:
+
+- Sustained capture through benign configuration notifications; real route loss still stops and retains the take.
+- Short words below one second, and a complete final word just after the 30-second decoder boundary ending before 31 seconds.
+- Calm no-speech/quiet receipts versus truthful interruption receipts, with the next shortcut immediately available.
+- Built-in and direct USB controls before drawing conclusions about a USB dock path.
+- Native editor and browser-field insertion, focus/caret changes, and recovery when delivery is unconfirmed.
+- Dock/reopen, custom shortcut/chime, accessibility appearance and offline recognition after model setup.
+
+These are running-app acceptance checks. A passing build or synthetic harness does not establish their outcome.

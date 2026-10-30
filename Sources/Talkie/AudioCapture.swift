@@ -30,6 +30,22 @@ enum AudioCaptureError: LocalizedError {
     }
 }
 
+/// A graph notification does not necessarily mean that its input stopped.
+/// Output-side reconfiguration can notify while a compatible input keeps
+/// running. Only keep that capture when its format and known route survive.
+private enum CaptureConfigurationPolicy {
+    static func canContinue(isRunning: Bool, originalFormat: AVAudioFormat,
+                            currentFormat: AVAudioFormat, originalDevice: AudioDeviceID?,
+                            currentDevice: AudioDeviceID?) -> Bool {
+        guard isRunning, originalFormat.isEqual(currentFormat) else { return false }
+        if let originalDevice { return currentDevice == originalDevice }
+        // Some engine-managed aggregate routes cannot be read back. Without
+        // a known baseline, the running engine and exact input format are the
+        // available evidence; the selected-device disconnect listener remains.
+        return true
+    }
+}
+
 /// The tap only reserves a bounded slot and copies its temporary PCM buffer.
 /// Disk writes and metering run on one serial queue. The short state lock is
 /// never held during disk I/O, buffer copying or draining the queue.
@@ -314,6 +330,9 @@ final class AudioCapture: ObservableObject {
         activeSessionID = sessionID
         isRecording = true
         level = 0
+        // Compare with the engine's successful route, which can be an internal
+        // aggregate rather than the hardware ID passed to SetProperty above.
+        let initialInputDevice = Self.currentInputDevice(unit)
         configurationObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange, object: captureEngine, queue: .main
         ) { [weak self, captureEngine] _ in
@@ -322,6 +341,11 @@ final class AudioCapture: ObservableObject {
             // hold the engine through teardown rather than releasing it there.
             DispatchQueue.main.async { [weak self, captureEngine] in
                 guard let self, self.activeSessionID == sessionID else { return }
+                let currentInput = captureEngine.inputNode
+                let currentDevice = currentInput.audioUnit.flatMap { Self.currentInputDevice($0) }
+                if CaptureConfigurationPolicy.canContinue(isRunning: captureEngine.isRunning,
+                    originalFormat: format, currentFormat: currentInput.outputFormat(forBus: 0),
+                    originalDevice: initialInputDevice, currentDevice: currentDevice) { return }
                 self.interrupt("The audio input changed. The audio captured so far has been saved; choose an input before continuing.")
                 withExtendedLifetime(captureEngine) {}
             }
@@ -369,6 +393,15 @@ final class AudioCapture: ObservableObject {
         level = 0
         activeDeviceUID = nil
         activeSessionID = nil
+    }
+
+    private static func currentInputDevice(_ unit: AudioUnit) -> AudioDeviceID? {
+        var device = AudioDeviceID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        guard AudioUnitGetProperty(unit, kAudioOutputUnitProperty_CurrentDevice,
+                                   kAudioUnitScope_Global, 0, &device, &size) == noErr,
+              device != kAudioObjectUnknown else { return nil }
+        return device
     }
 
     private static func defaultInputDevice() -> AudioDeviceID? {

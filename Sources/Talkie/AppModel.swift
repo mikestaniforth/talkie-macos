@@ -284,7 +284,7 @@ final class AppModel: ObservableObject {
                                              allowRepeatedAudio: captureWarning != nil)
             guard !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw SpeechEngineError.noSpeech }
         } catch {
-            if handleExpectedSpeechRejection(error, session: session, durationSeconds: duration) { return }
+            if handleExpectedSpeechRejection(error, session: session, durationSeconds: duration, interruption: interruption) { return }
             try? history.setStatus(sessionID: session.id, status: .transcriptionFailed, error: error.localizedDescription, durationSeconds: duration)
             selectedSessionID = session.id
             reset("Recording kept · Transcription needs retry")
@@ -357,21 +357,26 @@ final class AppModel: ObservableObject {
 
     /// Silence and low input are normal recording outcomes, rather than modal
     /// failures. Keep the take and make the next shortcut eligible immediately.
-    private func handleExpectedSpeechRejection(_ failure: Error, session: DictationSession, durationSeconds: Double?) -> Bool {
+    private func handleExpectedSpeechRejection(_ failure: Error, session: DictationSession, durationSeconds: Double?, interruption: String? = nil) -> Bool {
         guard unsavedText == nil, let rejection = failure as? SpeechEngineError else { return false }
-        let notice: ShortcutHUDNotice
+        let rejectionNotice: ShortcutHUDNotice
         switch rejection {
         case .noSpeech:
-            notice = ShortcutHUDNotice(title: "No speech", detail: "No speech was recognised. Ready for your next dictation. The recording is kept in Library.", symbolName: "mic.slash")
+            rejectionNotice = ShortcutHUDNotice(title: "No speech", detail: "No speech was recognised. Ready for your next dictation. The recording is kept in Library.", symbolName: "mic.slash")
         case .signalTooQuiet:
-            notice = ShortcutHUDNotice(title: "Too quiet", detail: "Move closer or increase microphone input gain, then try again. The recording is kept in Library.", symbolName: "waveform")
+            rejectionNotice = ShortcutHUDNotice(title: "Too quiet", detail: "Move closer or increase microphone input gain, then try again. The recording is kept in Library.", symbolName: "waveform")
         default: return false
         }
+        // A stopped input can leave only silence or a fraction of a second.
+        // Preserve the actual capture failure rather than blaming input gain.
+        let notice = interruption.map {
+            ShortcutHUDNotice(title: "Input interrupted", detail: $0, symbolName: "mic.slash")
+        } ?? rejectionNotice
         selectedSessionID = session.id
         let warning = history.sessions.first(where: { $0.id == session.id })?.captureWarning ?? session.captureWarning
         do {
-            try history.setStatus(sessionID: session.id, status: warning == nil ? .transcriptionFailed : .interrupted,
-                                  error: rejection.localizedDescription, durationSeconds: durationSeconds)
+            try history.setStatus(sessionID: session.id, status: warning == nil && interruption == nil ? .transcriptionFailed : .interrupted,
+                                  error: interruption ?? rejection.localizedDescription, durationSeconds: durationSeconds)
         } catch {
             reset("Recording kept · Recovery status not saved")
             self.error = "Your audio was kept, but Talkie could not save its recovery status. \(error.localizedDescription)"

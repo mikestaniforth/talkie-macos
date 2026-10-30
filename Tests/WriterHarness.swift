@@ -12,6 +12,33 @@ private final class WriterFailures: @unchecked Sendable {
 @main
 struct WriterHarness {
     static func main() throws {
+        let captureFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 48_000,
+                                          channels: 2, interleaved: false)!
+        func keepsCapture(running: Bool = true, format: AVAudioFormat? = nil,
+                          originalDevice: AudioDeviceID? = 41, currentDevice: AudioDeviceID? = 41) -> Bool {
+            CaptureConfigurationPolicy.canContinue(isRunning: running, originalFormat: captureFormat,
+                currentFormat: format ?? captureFormat, originalDevice: originalDevice, currentDevice: currentDevice)
+        }
+        precondition(keepsCapture(), "A graph notification stopped a running capture with the same input")
+        print("PASS benign graph notification preserves a running input")
+        precondition(!keepsCapture(running: false), "A stopped engine was treated as a usable capture")
+        print("PASS stopped engine still interrupts capture")
+        for (label, changedFormat) in [
+            ("sample rate", AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 44_100, channels: 2, interleaved: false)!),
+            ("channel count", AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 48_000, channels: 1, interleaved: false)!),
+            ("sample representation", AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 48_000, channels: 2, interleaved: false)!),
+            ("interleaving", AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 48_000, channels: 2, interleaved: true)!)
+        ] {
+            precondition(!keepsCapture(format: changedFormat), "Changed \(label) was accepted by the existing writer")
+            print("PASS changed \(label) interrupts incompatible capture")
+        }
+        precondition(!keepsCapture(currentDevice: 42), "A changed known input route continued silently")
+        print("PASS changed known input route interrupts capture")
+        precondition(!keepsCapture(currentDevice: nil), "A previously known route disappeared without interruption")
+        print("PASS loss of known route interrupts capture")
+        precondition(keepsCapture(originalDevice: nil, currentDevice: nil), "An unreadable engine-managed route stopped unchanged running input")
+        print("PASS unchanged running input tolerates an unreadable route baseline")
+
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("talkie-writer-tests-" + UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }

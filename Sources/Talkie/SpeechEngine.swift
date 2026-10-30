@@ -281,6 +281,10 @@ final class SpeechEngine: ObservableObject {
                 skipSpecialTokens: true,
                 withoutTimestamps: true,
                 wordTimestamps: false,
+                // The SDK defaults to skipping a final window of one second
+                // or less. Dictation must decode short replies and the end of
+                // longer takes too; the audibility check already rejects silence.
+                windowClipTime: 0,
                 promptTokens: promptTokens,
                 suppressBlank: true,
                 concurrentWorkerCount: 1
